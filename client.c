@@ -1,8 +1,16 @@
-#include "server_client.h"
+#include "client.h"
 
 #define PATHNAME "server_anchor.txt"
+#define SERVER_PROJ_ID 99
 #define MAX_LEN_INPUT 100
 
+
+int get_server_msqid(){
+  int id, msqid;
+  id = generate_msg_key(SERVER_PROJ_ID);
+  msqid = generate_queue(id, 0600 | IPC_CREAT);
+  return msqid;
+}
 
 int get_client_id(){
   char* line = NULL;
@@ -69,14 +77,16 @@ void receive_message(int msq_id, void* msg_p, size_t msg_sz, long msg_typ, int m
 
 }
 
-void send_message(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg){
+void send_message_to_server(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg){
   int sent_message = msgsnd(msq_id, msg_p, msg_sz, msg_flg);
   if (sent_message == -1){
     perror("Failed to send message: ");
   }
 }
 
+
 char* send_JOIN(int msq_id, int num_players){
+  int server_msqid, r;
   char* id = NULL;
   id = (char*)malloc(sizeof(char)* get_len_id(msq_id));
   struct msg j;
@@ -85,15 +95,60 @@ char* send_JOIN(int msq_id, int num_players){
   strcat(j.mtext, "J_");
   sprintf(id, "%d_%d", msq_id, num_players);
   strcat(j.mtext,id );
- 
-  printf("%s\n", j.mtext);
+  server_msqid = get_server_msqid();
+
+  send_message_to_server(server_msqid, &j, strlen(j.mtext), MSG_NOERROR);
   free(id);
+}
+
+void send_directional_message(char* direction, int client_msqid){
+  int server_msqid;
+  char* right = "right\n"; 
+  char* left = "left\n"; 
+  char* up = "up\n"; 
+  char* down = "down\n";
+  server_msqid = get_server_msqid();
+
+  char* id = NULL;
+  id = (char*)malloc(sizeof(char)* get_len_id(client_msqid));
+  sprintf(id, "%d", client_msqid);
+
+  struct msg m;
+  m.mtype = 1;
+  memset(&m.mtext, '\0', 10);
+
+  if (!strcmp(direction, right)){
+    strcat(m.mtext, "R_");
+    strcat(m.mtext, id);
+
+    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+
+  }
+  if (!strcmp(direction, left)){
+    strcat(m.mtext, "L_");
+    strcat(m.mtext, id);
+    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+
+  }
+  if (!strcmp(direction, up)){
+    strcat(m.mtext, "U_");
+    strcat(m.mtext, id);
+    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+
+  }
+  if (!strcmp(direction, down)){
+    strcat(m.mtext, "D_");
+    strcat(m.mtext, id);
+    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+
+  }
 
 }
+
  
 int main(){
 
-  int rtrn, num_messages, id, msq_id, run, client_id;
+  int rtrn, num_messages, id, msq_id, run = 1, client_id;
 
   struct msqid_ds msqid_ds, *buf;
   buf = &msqid_ds;
@@ -107,7 +162,7 @@ int main(){
   char* input = NULL;
   input = (char*)malloc(sizeof(char)*100);
 
-  printf("Please enter your squirrel's name...");
+  printf("Please enter your squirrel's name... ");
   fgets(input, MAX_LEN_INPUT, stdin);
   char* s_name;
   s_name = input;
@@ -116,7 +171,15 @@ int main(){
   scanf("%d", &num_players);
   printf("Thank you the game will begin shortly... %s", s_name);
   send_JOIN(msq_id, num_players);
-  
+
+  fflush(stdin);
+
+  while (run == 1){
+    fgets(input, MAX_LEN_INPUT, stdin);
+    send_directional_message(input, msq_id);
+    printf("Please enter direction to move: ");
+
+  }
   message_control(msq_id, IPC_RMID, buf);
 
 }

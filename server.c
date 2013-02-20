@@ -1,7 +1,7 @@
 #include "server.h"
 
 #define PATHNAME "server_anchor.txt"
-#define PROJ_ID 77
+#define PROJ_ID 99
 
 
 key_t generate_msg_key(){
@@ -28,7 +28,7 @@ void message_control(int msq_id, int cmd, struct msqid_ds* buf){
   }
 }
 
-void send_message(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg){
+void send_message_to_client(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg){
   int sent_message = msgsnd(msq_id, msg_p, msg_sz, msg_flg);
   if (sent_message == -1){
     perror("Failed to send message: ");
@@ -55,20 +55,14 @@ int main(){
   id = generate_msg_key();
 
   msq_id = generate_queue(id, 0600 | IPC_CREAT);
+  printf("MSQID: %d\n", msq_id);
   run = 1;
   while(run == 1){
     memset(&m.mtext, '\0', 100);
 
     
-    receive_message(msq_id, &m, 100, 1, MSG_NOERROR);
-
-    message_control(msq_id, IPC_STAT, buf);
-    if (!strcmp(m.mtext, "exit")){
-      run = 0;
-    }
-    else{
-      printf("Message: %s", m.mtext);
-    }
+    receive_message(msq_id, &m, 101, 1, MSG_NOERROR);
+    printf("Message: %s\n", m.mtext);
   }
 
   message_control(msq_id, IPC_RMID, buf);
