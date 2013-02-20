@@ -1,12 +1,45 @@
-#include "client.h"
+#include "server_client.h"
 
 #define PATHNAME "server_anchor.txt"
-#define PROJ_ID 77
+#define MAX_LEN_INPUT 100
 
 
-key_t generate_msg_key(){
+int get_client_id(){
+  char* line = NULL;
+  int id;
+  struct stat file_stat;
+
+  if (stat(PATHNAME, &file_stat) == 0){
+    FILE *in_file = fopen(PATHNAME, "r");
+    fscanf(in_file, "%d", &id);
+    fclose(in_file);   
+    return id;
+  }
+  else{
+    printf("server_anchor.txt does not exist\n");
+    exit(0);
+  }
+}
+
+void set_anchor_for_new_client(int prev_id){
+  FILE *in_file = fopen(PATHNAME, "w");
+  int new_id = prev_id+1;
+  fprintf(in_file, "%d", new_id);
+  fclose(in_file);
+}
+
+int get_len_id(int msq_id){
+  if (msq_id < 10){
+      return 1;
+  }
+  else{
+    return 1 + (msq_id / 10);
+  }
+}
+
+key_t generate_msg_key(int proj_id){
   int id; 
-  id = ftok(PATHNAME, PROJ_ID);
+  id = ftok(PATHNAME, proj_id);
   if (id == -1){
     perror("Failed to genereate message queue id: ");
   }
@@ -43,40 +76,48 @@ void send_message(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg){
   }
 }
 
+char* send_JOIN(int msq_id, int num_players){
+  char* id = NULL;
+  id = (char*)malloc(sizeof(char)* get_len_id(msq_id));
+  struct msg j;
+  j.mtype = 1;
+  memset(&j.mtext, '\0', 100);
+  strcat(j.mtext, "J_");
+  sprintf(id, "%d_%d", msq_id, num_players);
+  strcat(j.mtext,id );
+ 
+  printf("%s\n", j.mtext);
+  free(id);
+
+}
  
 int main(){
 
-  int rtrn, num_messages, id, msq_id, run;
-  extern int errno;
-  struct msg m;
-  m.mtype = 1;
+  int rtrn, num_messages, id, msq_id, run, client_id;
+
   struct msqid_ds msqid_ds, *buf;
-  buf = & msqid_ds;
-  
-  id = generate_msg_key();
+  buf = &msqid_ds;
+
+  client_id = get_client_id();
+  set_anchor_for_new_client(client_id);
+
+  id = generate_msg_key(client_id);
   msq_id = generate_queue(id, 0600 | IPC_CREAT);
-  run = 1;
+
   char* input = NULL;
   input = (char*)malloc(sizeof(char)*100);
-  while(run == 1){
 
-    memset(input, '\0', 100);
-    memset(&m.mtext, '\0', 100);
-
-    printf("Enter a string: ");
-    fgets(input, 100, stdin);
-
-    if (feof(stdin)){
-      printf("ctrl-d\n");
-      printf("Goodbye!\n");
-      strcpy(m.mtext, "exit");
-      send_message(msq_id, &m, strlen(m.mtext), MSG_NOERROR);
-      exit(0);
-    }
-    strcpy(m.mtext, input);
-    send_message(msq_id, &m, strlen(m.mtext), MSG_NOERROR);
-  }
-    message_control(msq_id, IPC_RMID, buf);
+  printf("Please enter your squirrel's name...");
+  fgets(input, MAX_LEN_INPUT, stdin);
+  char* s_name;
+  s_name = input;
+  printf("Please enter the number of players you would like in the game... ");
+  int num_players;
+  scanf("%d", &num_players);
+  printf("Thank you the game will begin shortly... %s", s_name);
+  send_JOIN(msq_id, num_players);
+  
+  message_control(msq_id, IPC_RMID, buf);
 
 }
 
