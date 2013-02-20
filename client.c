@@ -102,6 +102,7 @@ char* send_JOIN(int msq_id, int num_players){
 }
 
 void send_directional_message(char* direction, int client_msqid){
+  int message_set = 0;
   int server_msqid;
   char* right = "right\n"; 
   char* left = "left\n"; 
@@ -120,25 +121,32 @@ void send_directional_message(char* direction, int client_msqid){
   if (!strcmp(direction, right)){
     strcat(m.mtext, "R_");
     strcat(m.mtext, id);
+    message_set = 1;
 
-    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
 
   }
   if (!strcmp(direction, left)){
     strcat(m.mtext, "L_");
     strcat(m.mtext, id);
-    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+    message_set = 1;
 
   }
   if (!strcmp(direction, up)){
     strcat(m.mtext, "U_");
     strcat(m.mtext, id);
-    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+    message_set = 1;
 
   }
   if (!strcmp(direction, down)){
     strcat(m.mtext, "D_");
     strcat(m.mtext, id);
+    message_set = 1;
+
+  }
+
+  if (message_set == 0){
+    printf("Please enter valid move\n");
+  }else {
     send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
 
   }
@@ -174,10 +182,14 @@ int main(){
 
   fflush(stdin);
 
+  fgets(input, MAX_LEN_INPUT, stdin);
+
+
   while (run == 1){
+    printf("Please enter direction to move: ");
+
     fgets(input, MAX_LEN_INPUT, stdin);
     send_directional_message(input, msq_id);
-    printf("Please enter direction to move: ");
 
   }
   message_control(msq_id, IPC_RMID, buf);
