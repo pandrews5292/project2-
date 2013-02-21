@@ -3,6 +3,7 @@
 #define PATHNAME "server_anchor.txt"
 #define SERVER_PROJ_ID 99
 #define MAX_LEN_INPUT 100
+#define MAX_ACK_STRING 1000
 
 
 int get_server_msqid(){
@@ -10,6 +11,19 @@ int get_server_msqid(){
   id = generate_msg_key(SERVER_PROJ_ID);
   msqid = generate_queue(id, 0600 | IPC_CREAT);
   return msqid;
+}
+
+int generate_my_msqid(){
+  int client_id, id, msq_id;
+
+  client_id = get_client_id();
+  set_anchor_for_new_client(client_id);
+
+  id = generate_msg_key(client_id);
+  msq_id = generate_queue(id, 0600 | IPC_CREAT);
+
+  return msq_id;
+
 }
 
 int get_client_id(){
@@ -84,7 +98,6 @@ void send_message_to_server(int msq_id, const void* msg_p, size_t msg_sz, int ms
   }
 }
 
-
 char* send_JOIN(int msq_id, int num_players){
   int server_msqid, r;
   char* id = NULL;
@@ -148,48 +161,101 @@ void send_directional_message(char* direction, int client_msqid){
     printf("Please enter valid move\n");
   }else {
     send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
-
   }
-
 }
 
- 
-int main(){
-
-  int rtrn, num_messages, id, msq_id, run = 1, client_id;
-
-  struct msqid_ds msqid_ds, *buf;
-  buf = &msqid_ds;
-
-  client_id = get_client_id();
-  set_anchor_for_new_client(client_id);
-
-  id = generate_msg_key(client_id);
-  msq_id = generate_queue(id, 0600 | IPC_CREAT);
-
+void init_join(msq_id){
   char* input = NULL;
+  char* s_name;
+  int num_players;
   input = (char*)malloc(sizeof(char)*100);
 
   printf("Please enter your squirrel's name... ");
   fgets(input, MAX_LEN_INPUT, stdin);
-  char* s_name;
   s_name = input;
   printf("Please enter the number of players you would like in the game... ");
-  int num_players;
   scanf("%d", &num_players);
   printf("Thank you the game will begin shortly... %s", s_name);
   send_JOIN(msq_id, num_players);
 
-  fflush(stdin);
+  free(input);
+}
 
-  fgets(input, MAX_LEN_INPUT, stdin);
+char* check_server_response(){
+  int my_msqid;
+  my_msqid = generate_my_msqid();
 
+  struct msg* m;
+  m = (struct msg*)malloc(sizeof(struct msg));
+  
+  m->mtype = 1;
+  receive_message(my_msqid, &m, MAX_ACK_STRING, 1, MSG_NOERROR);
+
+  char* message = m->mtext;
+
+  return message;
+
+
+}
+
+void parse_server_ack(char* ack_string){
+  char* sep_newline = "\n";
+  char* temp_array = NULL;
+  int i = 0, j = 0;
+
+  char** game_info = NULL;
+  game_info = (char**)malloc(sizeof(char*)*MAX_ACK_STRING);
+  for (j; j< MAX_ACK_STRING; j++){
+    game_info[i] = (char*)malloc(sizeof(char)* 5);
+  }
+
+  if (ack_string[0] != 'B'){
+    printf("Bad start string....exiting\n");
+    exit(0);
+  }
+  else{
+    
+    temp_array = strtok(ack_string, sep_newline);
+    while(temp_array != NULL){
+      game_info[i] = temp_array;
+      temp_array = strtok(NULL, sep_newline);
+      i++;
+    }
+  }
+  int len = game_info[0][0];
+  int width = game_info[0][2];
+  printf("Grid Size is %d x %d\n", len, width);
+  
+}
+
+int main(){
+
+  char* input = NULL;
+  input = (char*)malloc(sizeof(char)*100);
+
+  int msq_id, run = 1;
+
+  struct msqid_ds msqid_ds, *buf;
+  buf = &msqid_ds;
+
+  msq_id = generate_my_msqid();
+
+  init_join(msq_id);
+
+  char* response = check_server_response();
+  parse_server_ack(response);
 
   while (run == 1){
-    printf("Please enter direction to move: ");
+
+    if (strlen(input) > 0){
+      printf("Please enter direction to move: ");
+    } 
 
     fgets(input, MAX_LEN_INPUT, stdin);
-    send_directional_message(input, msq_id);
+
+    if (strlen(input) > 1){
+      send_directional_message(input, msq_id);
+    }  
 
   }
   message_control(msq_id, IPC_RMID, buf);
