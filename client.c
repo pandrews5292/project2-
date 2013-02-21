@@ -5,15 +5,22 @@
 #define MAX_LEN_INPUT 100
 #define MAX_ACK_STRING 1000
 
+int CLIENT_MSQID;
+int SERVER_MSQID;
+int MY_COLLECTED_ACORNS;
 
-int get_server_msqid(){
+
+void get_server_msqid(){
+  //Get the servers msqid and set SERVER_MSQID
   int id, msqid;
   id = generate_msg_key(SERVER_PROJ_ID);
+  
   msqid = generate_queue(id, 0600 | IPC_CREAT);
-  return msqid;
+  SERVER_MSQID = msqid;
 }
 
-int generate_my_msqid(){
+void generate_my_msqid(){
+  //Get this clients msqid and set CLIENT_MSQID
   int client_id, id, msq_id;
 
   client_id = get_client_id();
@@ -21,12 +28,11 @@ int generate_my_msqid(){
 
   id = generate_msg_key(client_id);
   msq_id = generate_queue(id, 0600 | IPC_CREAT);
-
-  return msq_id;
-
+  CLIENT_MSQID = msq_id;
 }
 
 int get_client_id(){
+  //Get this clients id from server_anchor.txt
   char* line = NULL;
   int id;
   struct stat file_stat;
@@ -44,6 +50,7 @@ int get_client_id(){
 }
 
 void set_anchor_for_new_client(int prev_id){
+  //increment number in server_anchor.txt by 1 for new clients to use
   FILE *in_file = fopen(PATHNAME, "w");
   int new_id = prev_id+1;
   fprintf(in_file, "%d", new_id);
@@ -51,6 +58,7 @@ void set_anchor_for_new_client(int prev_id){
 }
 
 int get_len_id(int msq_id){
+  //Get length of msqid
   if (msq_id < 10){
       return 1;
   }
@@ -60,6 +68,7 @@ int get_len_id(int msq_id){
 }
 
 key_t generate_msg_key(int proj_id){
+  //Generate msg_key for generating queue
   int id; 
   id = ftok(PATHNAME, proj_id);
   if (id == -1){
@@ -69,6 +78,7 @@ key_t generate_msg_key(int proj_id){
 }
 
 int generate_queue(int msg_key, int msg_flg){
+  //Create this clients message queue
   int msq_id = msgget(msg_key, msg_flg);
   if (msq_id == -1){
     perror("Failed to generate message queue: ");
@@ -77,6 +87,7 @@ int generate_queue(int msg_key, int msg_flg){
 }
 
 void message_control(int msq_id, int cmd, struct msqid_ds* buf){
+  //Run msgctl on given msqid
   int control = msgctl(msq_id, cmd, buf);
   if (control == -1){
     perror("Failed to control queue: ");
@@ -84,14 +95,15 @@ void message_control(int msq_id, int cmd, struct msqid_ds* buf){
 }
 
 void receive_message(int msq_id, void* msg_p, size_t msg_sz, long msg_typ, int msg_flg){
+  //Receive message from this clients message queue
   ssize_t message_received = msgrcv(msq_id, msg_p, msg_sz, msg_typ, msg_flg);
   if (message_received == -1){
     perror("Messaged received failed: ");
   }
-
 }
 
 void send_message_to_server(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg){
+  //Send a message to the server
   int sent_message = msgsnd(msq_id, msg_p, msg_sz, msg_flg);
   if (sent_message == -1){
     perror("Failed to send message: ");
@@ -99,6 +111,7 @@ void send_message_to_server(int msq_id, const void* msg_p, size_t msg_sz, int ms
 }
 
 char* send_JOIN(int msq_id, int num_players){
+  //Send join message to the server.
   int server_msqid, r;
   char* id = NULL;
   id = (char*)malloc(sizeof(char)* get_len_id(msq_id));
@@ -108,20 +121,19 @@ char* send_JOIN(int msq_id, int num_players){
   strcat(j.mtext, "J_");
   sprintf(id, "%d_%d", msq_id, num_players);
   strcat(j.mtext,id );
-  server_msqid = get_server_msqid();
+  get_server_msqid();
 
-  send_message_to_server(server_msqid, &j, strlen(j.mtext), MSG_NOERROR);
+  send_message_to_server(SERVER_MSQID, &j, strlen(j.mtext), MSG_NOERROR);
   free(id);
 }
 
 void send_directional_message(char* direction, int client_msqid){
+  //Send specific directional message.
   int message_set = 0;
-  int server_msqid;
   char* right = "right\n"; 
   char* left = "left\n"; 
   char* up = "up\n"; 
   char* down = "down\n";
-  server_msqid = get_server_msqid();
 
   char* id = NULL;
   id = (char*)malloc(sizeof(char)* get_len_id(client_msqid));
@@ -135,36 +147,33 @@ void send_directional_message(char* direction, int client_msqid){
     strcat(m.mtext, "R_");
     strcat(m.mtext, id);
     message_set = 1;
-
-
   }
   if (!strcmp(direction, left)){
     strcat(m.mtext, "L_");
     strcat(m.mtext, id);
     message_set = 1;
-
   }
   if (!strcmp(direction, up)){
     strcat(m.mtext, "U_");
     strcat(m.mtext, id);
     message_set = 1;
-
   }
   if (!strcmp(direction, down)){
     strcat(m.mtext, "D_");
     strcat(m.mtext, id);
     message_set = 1;
-
   }
 
   if (message_set == 0){
     printf("Please enter valid move\n");
   }else {
-    send_message_to_server(server_msqid, &m, strlen(m.mtext), MSG_NOERROR);
+    send_message_to_server(SERVER_MSQID, &m, strlen(m.mtext), MSG_NOERROR);
   }
+  free(id);
 }
 
-void init_join(msq_id){
+void init_join(int msq_id){
+  //Initialize the clients join to the server
   char* input = NULL;
   char* s_name;
   int num_players;
@@ -175,57 +184,83 @@ void init_join(msq_id){
   s_name = input;
   printf("Please enter the number of players you would like in the game... ");
   scanf("%d", &num_players);
-  printf("Thank you the game will begin shortly... %s", s_name);
+  printf("Thank you the game will begin shortly with %d player(s)... \n\n", num_players );
   send_JOIN(msq_id, num_players);
 
   free(input);
 }
 
-char* check_server_response(){
-  int my_msqid;
-  my_msqid = generate_my_msqid();
+void check_init_server_response_and_parse(){
+  //Check the server join awk message, parse it, and print it to the user.
+  char* message;
+  struct msg m;
+  m.mtype = 1;
+  receive_message(CLIENT_MSQID, &m, MAX_ACK_STRING, 1, MSG_NOERROR);
+  message = strtok(m.mtext, "&");
+  printf("message from server: %s\n", message);
 
-  struct msg* m;
-  m = (struct msg*)malloc(sizeof(struct msg));
-  
-  m->mtype = 1;
-  receive_message(my_msqid, &m, MAX_ACK_STRING, 1, MSG_NOERROR);
-
-  char* message = m->mtext;
-
-  return message;
-
-
-}
-
-void parse_server_ack(char* ack_string){
-  char* sep_newline = "\n";
-  char* temp_array = NULL;
+  char* sep_newline = "/n";
+  char* temp_string = NULL;
   int i = 0, j = 0;
 
   char** game_info = NULL;
   game_info = (char**)malloc(sizeof(char*)*MAX_ACK_STRING);
-  for (j; j< MAX_ACK_STRING; j++){
-    game_info[i] = (char*)malloc(sizeof(char)* 5);
+ 
+  temp_string = strtok(message, sep_newline);
+  while(temp_string != NULL){
+    game_info[i] = temp_string;
+    temp_string = strtok(NULL, sep_newline);
+    i++;
   }
 
-  if (ack_string[0] != 'B'){
-    printf("Bad start string....exiting\n");
-    exit(0);
+  parse_grid_size(game_info[1]);
+
+  int k = 0;
+  for (k; k< i-2; k++){
+    parse_acorn_locations(game_info[k+2]);
   }
-  else{
-    
-    temp_array = strtok(ack_string, sep_newline);
-    while(temp_array != NULL){
-      game_info[i] = temp_array;
-      temp_array = strtok(NULL, sep_newline);
-      i++;
-    }
+  printf("\n");
+  printf("Enter right, left, up, down to move your squirrel\n");
+  free(game_info);
+}
+
+void parse_grid_size(char* info){
+  //Inform the user of the grid size
+  int i = 0;
+  char* temp_string;
+  char* sep_ = "_"; 
+  char* grid_size[2];
+  temp_string = strtok(info, sep_);
+  while(temp_string != NULL){
+    grid_size[i] = temp_string;
+    temp_string = strtok(NULL, sep_);
+    i++;
   }
-  int len = game_info[0][0];
-  int width = game_info[0][2];
-  printf("Grid Size is %d x %d\n", len, width);
-  
+  printf("The grid size is %s x %s\n",grid_size[0], grid_size[1]);
+}
+
+void parse_acorn_locations(char* info){
+  //Inform the user of the acorn locations
+  int i = 0;
+  char* temp_string;
+  char* sep_ = "_"; 
+  char* acorn_locations[3];
+  temp_string = strtok(info, sep_);
+  while(temp_string != NULL){
+    acorn_locations[i] = temp_string;
+    temp_string = strtok(NULL, sep_);
+    i++;
+  }
+  printf("There are %s acorns located at (%s, %s)\n", acorn_locations[2], acorn_locations[0], acorn_locations[1]);
+}
+
+void parse_server_reply(){
+  struct msg m;
+  memset(&m.mtext, '\0', 100);
+  m.mtype = 1;
+  receive_message(CLIENT_MSQID, &m, MAX_ACK_STRING, 1, MSG_NOERROR);
+  printf("%s\n", m.mtext);
+
 }
 
 int main(){
@@ -238,12 +273,12 @@ int main(){
   struct msqid_ds msqid_ds, *buf;
   buf = &msqid_ds;
 
-  msq_id = generate_my_msqid();
+  generate_my_msqid();
+  get_server_msqid();
 
-  init_join(msq_id);
+  init_join(CLIENT_MSQID);
 
-  char* response = check_server_response();
-  parse_server_ack(response);
+  check_init_server_response_and_parse();
 
   while (run == 1){
 
@@ -254,11 +289,11 @@ int main(){
     fgets(input, MAX_LEN_INPUT, stdin);
 
     if (strlen(input) > 1){
-      send_directional_message(input, msq_id);
+      send_directional_message(input, CLIENT_MSQID);
+      parse_server_reply();
     }  
 
   }
   message_control(msq_id, IPC_RMID, buf);
-
 }
 
