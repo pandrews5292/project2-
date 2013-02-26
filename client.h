@@ -8,12 +8,12 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 
-#define MAX_STRING 100;
+#define MAX_STRING 1000
 
 
 struct msg {
   long mtype;
-  char mtext[100];
+  char mtext[MAX_STRING];
 };
 void get_server_msqid();
 
@@ -39,7 +39,7 @@ void receive_message(int msq_id, void* msg_p, size_t msg_sz, long msg_typ, int m
 
 void send_message_to_server(int msq_id, const void* msg_p, size_t msg_sz, int msg_flg);
 
-void send_directional_message(char* direction, int client_msqid);
+int send_directional_message(char* direction, int client_msqid);
 
 void parse_grid_size(char* info);
 

@@ -2,12 +2,12 @@
 
 #define PATHNAME "server_anchor.txt"
 #define SERVER_PROJ_ID 99
-#define MAX_LEN_INPUT 100
-#define MAX_ACK_STRING 1000
 
 int CLIENT_MSQID;
+long M_TYPE;
 int SERVER_MSQID;
-int MY_COLLECTED_ACORNS;
+int MY_COLLECTED_ACORNS = 0;
+char* MY_NAME;
 
 
 void get_server_msqid(){
@@ -29,6 +29,7 @@ void generate_my_msqid(){
   id = generate_msg_key(client_id);
   msq_id = generate_queue(id, 0600 | IPC_CREAT);
   CLIENT_MSQID = msq_id;
+  M_TYPE = 1;
 }
 
 int get_client_id(){
@@ -112,22 +113,25 @@ void send_message_to_server(int msq_id, const void* msg_p, size_t msg_sz, int ms
 
 char* send_JOIN(int msq_id, int num_players){
   //Send join message to the server.
-  int server_msqid, r;
+  int server_msqid;
   char* id = NULL;
   id = (char*)malloc(sizeof(char)* get_len_id(msq_id));
   struct msg j;
-  j.mtype = 1;
-  memset(&j.mtext, '\0', 100);
+  j.mtype = M_TYPE;
+  memset(&j.mtext, 0, 100);
   strcat(j.mtext, "J_");
   sprintf(id, "%d_%d", msq_id, num_players);
   strcat(j.mtext,id );
+  strcat(j.mtext,"_");
+  strcat(j.mtext, MY_NAME);
+  printf("join message: %s\n", j.mtext);
   get_server_msqid();
 
   send_message_to_server(SERVER_MSQID, &j, strlen(j.mtext), MSG_NOERROR);
   free(id);
 }
 
-void send_directional_message(char* direction, int client_msqid){
+int send_directional_message(char* direction, int client_msqid){
   //Send specific directional message.
   int message_set = 0;
   char* right = "right\n"; 
@@ -138,10 +142,11 @@ void send_directional_message(char* direction, int client_msqid){
   char* id = NULL;
   id = (char*)malloc(sizeof(char)* get_len_id(client_msqid));
   sprintf(id, "%d", client_msqid);
+  direction = strtok(direction, " ");
 
   struct msg m;
-  m.mtype = 1;
-  memset(&m.mtext, '\0', 10);
+  m.mtype = M_TYPE;
+  memset(&m.mtext, 0, 10);
 
   if (!strcmp(direction, right)){
     strcat(m.mtext, "R_");
@@ -170,18 +175,18 @@ void send_directional_message(char* direction, int client_msqid){
     send_message_to_server(SERVER_MSQID, &m, strlen(m.mtext), MSG_NOERROR);
   }
   free(id);
+  return message_set;
 }
 
 void init_join(int msq_id){
   //Initialize the clients join to the server
   char* input = NULL;
-  char* s_name;
   int num_players;
-  input = (char*)malloc(sizeof(char)*100);
+  input = (char*)malloc(sizeof(char)*1000);
 
   printf("Please enter your squirrel's name... ");
-  fgets(input, MAX_LEN_INPUT, stdin);
-  s_name = input;
+  fgets(input, MAX_STRING, stdin);
+  MY_NAME = input;
   printf("Please enter the number of players you would like in the game... ");
   scanf("%d", &num_players);
   printf("Thank you the game will begin shortly with %d player(s)... \n\n", num_players );
@@ -195,16 +200,17 @@ void check_init_server_response_and_parse(){
   char* message;
   struct msg m;
   m.mtype = 1;
-  receive_message(CLIENT_MSQID, &m, MAX_ACK_STRING, 1, MSG_NOERROR);
+  memset(&m.mtext, 0, 1000);
+  printf("waiting for a response from server...\n\n");
+  receive_message(CLIENT_MSQID, &m, MAX_STRING, M_TYPE, MSG_NOERROR);
   message = strtok(m.mtext, "&");
-  printf("message from server: %s\n", message);
 
   char* sep_newline = "/n";
   char* temp_string = NULL;
   int i = 0, j = 0;
 
   char** game_info = NULL;
-  game_info = (char**)malloc(sizeof(char*)*MAX_ACK_STRING);
+  game_info = (char**)malloc(sizeof(char*)*MAX_STRING);
  
   temp_string = strtok(message, sep_newline);
   while(temp_string != NULL){
@@ -251,19 +257,32 @@ void parse_acorn_locations(char* info){
     temp_string = strtok(NULL, sep_);
     i++;
   }
-  printf("There are %s acorns located at (%s, %s)\n", acorn_locations[2], acorn_locations[0], acorn_locations[1]);
+  printf("There are %s acorns located at (%s, %s)\n", acorn_locations[2], acorn_locations[1], acorn_locations[0]);
 }
 
 void parse_server_reply(){
+  //Determine message sent from server based on directional move and print to use
   struct msg m;
-  memset(&m.mtext, '\0', 100);
+  memset(&m.mtext, 0, 100);
   m.mtype = 1;
-  receive_message(CLIENT_MSQID, &m, MAX_ACK_STRING, 1, MSG_NOERROR);
-  printf("%s\n", m.mtext);
+  receive_message(CLIENT_MSQID, &m, MAX_STRING, M_TYPE, MSG_NOERROR);
+  if (!strcmp(m.mtext, "Your move was successful and you got an ACORN!!")){
+    //printf("MY_COLLECTED_ACORNS++\n");
+    MY_COLLECTED_ACORNS++;
+  }
+  if (!strcmp(m.mtext, "GAME OVER")){
+    printf("You found the most the acorns(%d)...you win!!\n", MY_COLLECTED_ACORNS+1);
+    printf("Exiting...\n");
+    exit(0);
+  }
+  else{
+    printf("%s\n", m.mtext);
+  }
 
 }
 
 int main(){
+  int message_set = 0;
 
   char* input = NULL;
   input = (char*)malloc(sizeof(char)*100);
@@ -286,11 +305,14 @@ int main(){
       printf("Please enter direction to move: ");
     } 
 
-    fgets(input, MAX_LEN_INPUT, stdin);
+    fgets(input, MAX_STRING, stdin);
 
     if (strlen(input) > 1){
-      send_directional_message(input, CLIENT_MSQID);
-      parse_server_reply();
+     
+      message_set = send_directional_message(input, CLIENT_MSQID);
+      if (message_set == 1){
+	      parse_server_reply();
+      }
     }  
 
   }

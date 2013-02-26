@@ -6,57 +6,48 @@
 
 #define MAX_INT 1000
 
-Grid* createGrid(int width,int length)
+Grid* create_grid(int size)
 {
   //initializes the grid and an array that will contain the number of acorns in
   // in that position
-
   int i,j;
-  Grid* myGrid = (Grid*) malloc(sizeof(Grid));
-  myGrid->width = width;
-  myGrid->length = length;
-  myGrid->TotalAcorns = 0;
 
-  myGrid->allAcorns = (int**) malloc(sizeof(int*)*(myGrid->width));
+  Grid* myGrid = (Grid*)malloc(sizeof(Grid));
+  myGrid->size = size;
+ 
+  myGrid->total_acorns = 0;
+
+  myGrid->allAcorns = (int**)malloc(sizeof(int*)*(myGrid->size));
   
-  for(i=0;i<myGrid->width;i++)
-    {
-      myGrid->allAcorns[i] = (int*) malloc(sizeof(int)*(myGrid->length));
-      for(j=0;j<myGrid->length;j++)
-	{
-	  myGrid->allAcorns[i][j] = 0;
-	}
-    }
-  
+  for(i=0; i<myGrid->size; i++)
+  {
+    myGrid->allAcorns[i] = (int*) malloc(sizeof(int)*(myGrid->size));
+    for(j=0; j<myGrid->size; j++)
+	  {
+	    myGrid->allAcorns[i][j] = 0;
+	  }
+  }
   return myGrid;
 }
 
-  
-int getLength(Grid* myGrid)
+void print_grid(Grid* myGrid)
+//print out the current state of the grid
 {
-  //returns the length of the grid
-  return myGrid->length;
+  int i,j;
+  for(i=0;i<myGrid->size;i++)
+    {
+      for(j=0;j<myGrid->size;j++)
+	     {
+	       printf("%d ",myGrid->allAcorns[i][j]);
+	 
+	     }
+       printf("\n");
+    }
 }
 
-int getWidth(Grid* myGrid)
-{
-  //returns the width of the grid
-  return myGrid->width;
-}
 
-int getTotalAcorns(Grid* myGrid)
-{
-  //returns the total number of acorns left
-  return myGrid->TotalAcorns;
-}
 
-int noAcorns(Grid* myGrid)
-{
-  if(myGrid->TotalAcorns>0) {return 1;}
-  else {return 0;}
-}
-
-void generateAcorns(Grid* myGrid)
+void generate_random_acorns(Grid* myGrid)
 {
   //generates random number of acorns
   srand(time(NULL));
@@ -64,79 +55,61 @@ void generateAcorns(Grid* myGrid)
   
   int i,j;
   
-  for(i=0;i<myGrid->width;i++)
-    for(j=0;j<myGrid->length;j++)
-      {
-	int numAcorns=0;
-	
-	randNum = rand()%2;
-	while(randNum == 0)
-	  {
-	    numAcorns++;
-	    randNum = rand()%2;
-	  }
-	myGrid->allAcorns[i][j] = numAcorns;
-	myGrid->TotalAcorns += numAcorns;
-      }
-}
-
-void generateAcorns2(Grid* myGrid,int numPlayers)
-{
-  //generates acorn according to the number of players
-  srand(time(NULL));
-  int randNum;
-  int greatest;
-  int scale = numPlayers*3;
-  int i,j,x,y;
-  
-  myGrid->TotalAcorns+=scale;
-  
-  if(myGrid->length > myGrid->width)   {greatest = myGrid->length;} 
-  else if(myGrid->width > myGrid->length)   {greatest = myGrid->width;}
-  else   {greatest =myGrid->length;}
-  
-  
-  while(scale>0)
+  for(i=0;i<myGrid->size;i++)
+    for(j=0;j<myGrid->size;j++)
     {
-      randNum = rand() % greatest;
-      for(i=0;i<2;i++)
-	{
-	  if(i==0){x = randNum;}
-	  else if(i==1){y = randNum;}
-	  randNum = rand() % greatest;
-	}
- 
-      if(greatest ==  myGrid->width && y!=0)
-	{
-	myGrid->allAcorns[x][y-1] = myGrid->allAcorns[x][y-1] + 1;
-	}
-      else if(greatest ==  myGrid->length && x!=0 )
-	{
-	myGrid->allAcorns[x-1][y] = myGrid->allAcorns[x-1][y] + 1;
-	}
-      else
-	{
-	  myGrid->allAcorns[x][y] = myGrid->allAcorns[x][y] + 1;
-	}
-      scale-=1;	  
+	    int numAcorns=0;
+	
+	    randNum = rand()%2;
+	    while(randNum == 0)
+	    {
+	      numAcorns++;
+	      randNum = rand()%2;
+	    }
+	    myGrid->allAcorns[i][j] = numAcorns;
+	    myGrid->total_acorns += numAcorns;
     }
 }
 
-char* boardInfo(Grid* myGrid,char* myInfo)
+void generate_acorns_per_player(Grid* myGrid,int numPlayers){
+
+  //generates acorn according to the number of players
+  srand(time(NULL));
+  int i, j, x, y, randNum, scale = numPlayers*10;
+  
+  myGrid->total_acorns = scale; 
+ 
+  while(scale > 0) {
+    randNum = rand() % myGrid->size;
+    for (i = 0; i<2; i++){
+      if (i == 0){
+        x = randNum;
+      }
+      else{
+        y = randNum;
+      }
+      randNum = rand() % myGrid->size;
+    }
+    myGrid->allAcorns[x][y] += 1;
+    scale -= 1;       
+  }
+}
+
+void set_board_info(Grid* myGrid, char* myInfo)
+//set init message to send to client to inform them of board info
 {
-  //char* myInfo =(char*) malloc(sizeof(char));
   char init[] ="B/n";
-  char gridsize[25];
-  sprintf(gridsize,"%d_%d/n",myGrid->width,myGrid->length);
+  char gridsize[MAX_INT];
+  sprintf(gridsize,"%d_%d/n",myGrid->size,myGrid->size);
   strcpy(myInfo,init);
   strcat(myInfo,gridsize);
 
   int i,j;
   
-  for(i=0;i<myGrid->width;i++)
+  for(i=0;i<myGrid->size;i++)
     {
-      char coordinates[25];
-      for(j=0;j<myGrid->length;j++)
+      char coordinates[MAX_INT];
+      for(j=0;j<myGrid->size;j++)
 	{
 	  if(myGrid->allAcorns[i][j] != 0)
 	    {
@@ -148,3 +121,83 @@ char* boardInfo(Grid* myGrid,char* myInfo)
   strcat(myInfo,"&");
 }
 
+Squirrel* create_squirrel(Grid* myGrid,int msq_id)
+//create a squirrel
+{
+  
+  srand(time(NULL));
+
+  Squirrel* mySquirrel = (Squirrel*) malloc(sizeof(Squirrel));
+  mySquirrel->msq_id = msq_id;
+  int randNum, greatest, x, y;
+  
+  greatest =myGrid->size;
+  
+  randNum = rand() % greatest;
+  x = randNum;
+  randNum = rand() % greatest;		   
+  y = randNum;
+  
+  while(myGrid->allAcorns[x][y]!=0)
+    {
+      randNum = rand() % greatest;
+      x = randNum;
+      randNum = rand() % greatest;		   
+      y = randNum;
+    }
+  mySquirrel->x =x;
+  mySquirrel->y =y;
+  mySquirrel->numAcorns=0;
+  return mySquirrel;
+}
+
+int move_squirrel(Grid* myGrid, Squirrel* squirrel, char direction){
+  //move the squirrel to a new position on the board if legal
+  printf("squirrelname: %s\n",squirrel->name);
+  int direction_to_move;
+  char* dir;
+  if (direction == 'U'){
+    dir = "U";
+    direction_to_move = squirrel->x - 1;
+  }
+  else if (direction == 'D'){
+    dir = "D";
+    direction_to_move = squirrel->x + 1;
+  }
+  else if (direction == 'L'){
+    dir = "L";
+    direction_to_move = squirrel->y - 1;
+  }
+  else if (direction == 'R'){
+    dir = "R";
+    direction_to_move = squirrel->y + 1;
+  }
+
+  if (direction_to_move < 0 || direction_to_move > myGrid->size - 1) {
+    //bad move
+    return 0;
+  }
+  else{
+
+      if (!strcmp(dir, "U") || !strcmp(dir, "D")){
+        squirrel->x = direction_to_move;
+      }
+      if (!strcmp(dir, "R") || !strcmp(dir, "L")) {
+        squirrel->y = direction_to_move;
+      }
+      if (myGrid->allAcorns[squirrel->x][squirrel->y] != 0){
+          squirrel->numAcorns++;
+          myGrid->allAcorns[squirrel->x][squirrel->y] -= 1; 
+          myGrid->total_acorns -= 1;
+          printf("total_acorns: %d\n", myGrid->total_acorns);
+          //game over
+          if (myGrid->total_acorns == 0) {return 3;}
+          //got an acorn
+          return 1;
+      }
+      else{
+          //good move no acorn
+          return 2;
+      }
+  }
+}
